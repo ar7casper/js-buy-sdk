@@ -32,6 +32,11 @@ module.exports = function (pathConfig, env) {
   const amdTree = sourceTree(pathConfig, 'amd');
   const polyfillTree = polyfills(env);
   const loaderTree = loader();
+  const commonTree = sourceTree(pathConfig, 'common');
+  const nodeLibOutput = funnel(commonTree, {
+    srcDir: '.',
+    destDir: './node-lib/src'
+  });
 
   const globalsOutput = concat(mergeTrees([amdTree, loaderTree]), {
     header: ';(function () {',
@@ -65,7 +70,6 @@ window.ShopifyBuy = require('shopify-buy/shopify').default;
       sourceMapConfig: { enabled: false }
     });
 
-    const commonTree = sourceTree(pathConfig, 'commonjs');
     const commonOutput = concat(commonTree, {
       inputFiles: ['**/*.js'],
       outputFile: `${pkg.name}.common.js`,
@@ -79,10 +83,6 @@ window.ShopifyBuy = require('shopify-buy/shopify').default;
       sourceMapConfig: { enabled: false }
     });
 
-    const nodeLibOutput = funnel(commonTree, {
-      srcDir: '.',
-      destDir: './node-lib'
-    });
 
     tree = mergeTrees([
       polyfillTree,
@@ -129,7 +129,8 @@ window.ShopifyBuy = require('shopify-buy/shopify').default;
         amdOutput,
         polyfillTree,
         globalsOutput,
-        polyFilledGlobalsOutput
+        polyFilledGlobalsOutput,
+        nodeLibOutput,
       ])
     ], { templateString: '{{versionString}}' });
   }
