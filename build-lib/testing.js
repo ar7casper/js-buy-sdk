@@ -36,9 +36,9 @@ function testsTree(pathConfig) {
     include: ['index.html']
   });
 
-  const qunitShim = funnel(babelTranspiler(pathConfig.shims, babelConfig(null, 'amd')), {
-    include: ['qunit.js']
-  });
+  const qunitShim = funnel(pathConfig.shims, { include: ['qunit.js'] });
+  const qunitShimAmd = babelTranspiler(qunitShim, babelConfig(null, 'amd'));
+  const qunitShimCommon = babelTranspiler(qunitShim, babelConfig(null, 'common'));
 
   const testJs = funnel(pathConfig.tests, {
     include: ['**/*.js']
@@ -51,14 +51,20 @@ function testsTree(pathConfig) {
   ]);
 
   const testModules = babelTranspiler(mergeTrees([testJs, linterTests]), babelConfig(`${pkg.name}/tests`, 'amd'));
+  const testsCommon = babelTranspiler(testJs, babelConfig(pkg.name, 'common'));
 
-  const concatenatedTests = concat(mergeTrees([qunitShim, testModules]), {
+  const concatenatedTests = concat(mergeTrees([qunitShimAmd, testModules]), {
     headerFiles: ['qunit.js'],
     inputFiles: '**/*.js',
     outputFile: 'tests.js'
   });
 
-  return mergeTrees([html, concatenatedTests]);
+  const nodeLibTestOutput = funnel(mergeTrees([qunitShimCommon, testsCommon]), {
+    srcDir: '.',
+    destDir: './node-lib/tests'
+  });
+
+  return mergeTrees([html, concatenatedTests, nodeLibTestOutput]);
 }
 
 module.exports = function (pathConfig /* , env */) {
