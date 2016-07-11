@@ -1,6 +1,6 @@
 /* global require, module */
 
-if (process.version < 'v4.0.0') {
+if (process.version <= 'v4.4.7') {
   require('babel-register')({
     ignore: function (fileName) {
       var whitelistedPackages = [
