@@ -2,6 +2,8 @@
 
 "use strict";
 
+const recursiveReadDir = require('./recursive-read-dir');
+const mkdirp = require('./mkdirp');
 const Plugin = require('broccoli-plugin');
 const path = require('path');
 const fs = require('fs');
@@ -58,20 +60,20 @@ Versioner.prototype.replaceTemplateString = function (versionString, buffer) {
 
 Versioner.prototype.versionFiles = function () {
   const versionString = `v${this.constructor.VERSION}-${this.constructor.HEAD_COMMIT}`;
-
-  const files = this.inputPaths.reduce((fileAcc, dir) => {
-    const list = fs.readdirSync(dir).map(fileName => {
-      return path.join(dir, fileName);
+  const fileDescriptions = [].concat(...this.inputPaths.map(dirname => {
+    return recursiveReadDir(dirname).map(fileName => {
+      return {
+        baseDirectory: dirname,
+        fileName: fileName
+      }
     });
+  }));
 
-    return fileAcc.concat(list);
-  }, []);
-
-  files.forEach(fileName => {
-    const inputBuffer = fs.readFileSync(path.join(fileName));
+  fileDescriptions.forEach(description => {
+    const inputBuffer = fs.readFileSync(path.join(description.fileName));
     let outputBuffer;
 
-    if (fileName.match(/^.+\.js$/)) {
+    if (description.fileName.match(/^.+\.js$/)) {
       outputBuffer = this.replaceTemplateString(
         versionString,
         this.prependComment(versionString, inputBuffer)
@@ -80,7 +82,10 @@ Versioner.prototype.versionFiles = function () {
       outputBuffer = inputBuffer;
     }
 
-    fs.writeFileSync(path.join(this.outputPath, path.basename(fileName)), outputBuffer);
+    const destination = description.fileName.replace(description.baseDirectory, this.outputPath);
+
+    mkdirp(path.dirname(destination));
+    fs.writeFileSync(destination, outputBuffer);
   });
 };
 
