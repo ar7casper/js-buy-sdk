@@ -4,105 +4,104 @@
 
 'use strict';
 
-global.QUnit = require('qunitjs');
-let path = require('path');
-let Module = require('module');
-let fs = require('fs');
-let index = 1;
-let tapMessage = '';
-const tests = {};
-const originalRequire = Module.prototype.require;
+const path = require('path');
+const Module = require('module');
+const fs = require('fs');
+const QUnit = require('qunitjs');
+const testsDir = __dirname + "/../.dist-test/node-lib/tests";
+const recursiveReadDir = require('../build-lib/util/recursive-read-dir');
 
-Module.prototype.require = function () {
-  const shopifyBuySrcNamespace = 'shopify-buy';
-  const shopifyBuyTestsNamespace = 'shopify-buy/tests';
-  const qunitShimName = 'qunit';
-  const requiresShopifyBuySrc = arguments[0].indexOf(shopifyBuySrcNamespace) === 0;
-  const requiresShopifyBuyTest = arguments[0].indexOf(shopifyBuyTestsNamespace) === 0;
-  const requiresQunitShim = arguments[0] === qunitShimName;
-
-  if (requiresShopifyBuyTest || requiresShopifyBuySrc || requiresQunitShim) {
-    const libDirectoryName = 'node-lib';
-    const srcDirectoryName = 'src';
-    const testsDirectoryName = 'tests';
-    const currentDirectoryFullPath = path.dirname(this.id);
-
-    const distDirectoryFullPath = currentDirectoryFullPath.substring(0, currentDirectoryFullPath.indexOf(libDirectoryName));
-    const srcDirectoryFullPath = path.join(distDirectoryFullPath, libDirectoryName, srcDirectoryName);
-    const srcDirectoryRelativePath = path.relative(currentDirectoryFullPath, srcDirectoryFullPath);
-    const testsDirectoryFullPath = path.join(distDirectoryFullPath, libDirectoryName, testsDirectoryName);
-    const testsDirectoryRelativePath = path.relative(currentDirectoryFullPath, testsDirectoryFullPath);
-
-    if (requiresQunitShim) {
-      arguments[0] = path.join(testsDirectoryRelativePath, arguments[0]);
-    } else if (requiresShopifyBuyTest) { //order matters here. `shopify-buy/tests` must match before `shopify-buy`
-      arguments[0] = arguments[0].replace(shopifyBuyTestsNamespace, testsDirectoryRelativePath);
-    } else if (requiresShopifyBuySrc) {
-      arguments[0] = arguments[0].replace(shopifyBuySrcNamespace, srcDirectoryRelativePath);
+function mockLocalStorage() {
+  global.localStorage = {
+    cache: {},
+    setItem(key, value) {
+      this.cache[key] = value;
+    },
+    getItem(key) {
+      return this.cache[key] || null;
+    },
+    removeItem(key) {
+      delete this.cache[key];
     }
-
-
-  }
-
-  return originalRequire.apply(this, arguments);
-};
-
-function addToLog(message) {
-  tapMessage = `${tapMessage}${message}\n`;
+  };
 }
 
-QUnit.log(function (data) {
-  if (!tests[data.testId]) {
-    tests[data.testId] = [];
-  }
+function overrideRequire() {
+  const originalRequire = Module.prototype.require;
+  Module.prototype.require = function () {
+    const srcNamespace = 'shopify-buy';
+    const testsNamespace = 'shopify-buy/tests';
+    const libDirName = 'node-lib';
+    const srcDirName = 'src';
+    const testsDirName = 'tests';
+    const currentDirFullPath = path.dirname(this.id);
+    const distBaseDirFullPath = currentDirFullPath.substring(0, currentDirFullPath.indexOf(libDirName));
+    let newRequire = arguments[0];
 
-  tests[data.testId].push(data);
-});
+    if (arguments[0] === 'qunit') {
+      // console.log(this.id)
+      // arguments[0] = path.join(testsDirRelativePath, arguments[0]);
+      newRequire = 'qunitjs';
+    } else if (arguments[0] === 'pretender') {
+      newRequire = 'fetch-pretender';
+    } else if (arguments[0].indexOf(testsNamespace) === 0) { //order matters here. `shopify-buy/tests` must match before `shopify-buy`
+      const testsDirFullPath = path.join(distBaseDirFullPath, libDirName, testsDirName);
+      const testsDirRelativePath = path.relative(currentDirFullPath, testsDirFullPath);
 
-QUnit.testDone(function (data) {
-  let status = 'ok';
+      newRequire = arguments[0].replace(testsNamespace, testsDirRelativePath);
+    } else if (arguments[0].indexOf(srcNamespace) === 0) {
+      const srcDirFullPath = path.join(distBaseDirFullPath, libDirName, srcDirName);
+      const srcDirRelativePath = path.relative(currentDirFullPath, srcDirFullPath);
 
-  if (data.failed !== 0) {
-    status = 'not ok';
-  }
-
-  addToLog(`${status} ${index} NodeQUnit - ${data.module}: ${data.name}`);
-  if (data.failed !== 0) {
-    tests[data.testId].forEach(function (log) {
-      if (log.result === false) {
-        addToLog('actual: >', log.actual);
-        addToLog('expected: >', log.expected);
-        addToLog('message: >', log.message);
-        addToLog('Log: ', '');
-      }
-    });
-  }
-
-  delete tests[data.testId];
-  index++;
-});
-
-QUnit.done(function () {
-  console.info(tapMessage);
-});
-
-function recursiveReadDir(dir) {
-  let files = [];
-
-  fs.readdirSync(dir).forEach(function (fileName) {
-    fileName = path.join(dir, fileName);
-    if (fs.statSync(fileName).isDirectory()) {
-      files = files.concat(recursiveReadDir(fileName));
-    } else {
-      files = files.concat(fileName);
+      newRequire = arguments[0].replace(srcNamespace, srcDirRelativePath);
     }
+
+    arguments[0] = newRequire;
+    return originalRequire.apply(this, arguments);
+  };
+}
+
+function setupQUnitCallbacks() {
+  let index = 1;
+  const tests = {};
+
+  QUnit.log(function (data) {
+    if (!tests[data.testId]) {
+      tests[data.testId] = [];
+    }
+
+    tests[data.testId].push(data);
   });
 
-  return files;
+  QUnit.testDone(function (data) {
+    let status = 'ok';
+
+    if (data.failed !== 0) {
+      status = 'not ok';
+    }
+
+    console.info(`${status} ${index} NodeQUnit - ${data.module}: ${data.name}`);
+    if (data.failed !== 0) {
+      tests[data.testId].forEach(function (log) {
+        if (log.result === false) {
+          console.info('\tactual: >', log.actual);
+          console.info('\texpected: >', log.expected);
+          console.info('\tmessage: >', log.message);
+          console.info('\tLog: ', '');
+        }
+      });
+    }
+
+    delete tests[data.testId];
+    index++;
+  });
 }
 
-recursiveReadDir(`${__dirname}/../.dist-test/node-lib/tests`).map(function(test){
-  // console.log(test)
+overrideRequire();
+mockLocalStorage();
+setupQUnitCallbacks();
+
+recursiveReadDir(testsDir).map(function(test){
   require(test);
 });
 
