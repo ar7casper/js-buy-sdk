@@ -1,7 +1,7 @@
 import { module, test } from 'qunit';
 import ListingsAdapter from 'shopify-buy/adapters/listings-adapter';
 import version from 'shopify-buy/version';
-import Promise from 'promise';
+import 'shopify-buy/isomorphic-btoa';
 
 let adapter;
 
