@@ -5,7 +5,7 @@
   "disable_watching": true,
   "launchers": {
     "NodeQUnit": {
-      "command": "node scripts/test-node.js",
+      "command": "node scripts/util/test-in-node.js",
       "protocol": "tap"
     }
   },

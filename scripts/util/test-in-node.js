@@ -8,8 +8,8 @@ const path = require('path');
 const Module = require('module');
 const fs = require('fs');
 const QUnit = require('qunitjs');
-const testsDir = __dirname + "/../.dist-test/node-lib/tests";
-const recursiveReadDir = require('../build-lib/util/recursive-read-dir');
+const testsDir = process.cwd() + '/.dist-test/node-lib/tests';
+const recursiveReadDir = require(process.cwd() + '/build-lib/util/recursive-read-dir');
 
 function mockLocalStorage() {
   global.localStorage = {
